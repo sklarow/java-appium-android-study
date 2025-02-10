@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest  
+    runs-on: macos-latest  
 
     steps:
       - name: Checkout Repository
@@ -21,30 +21,20 @@ jobs:
           java-version: '17'
           cache: 'maven'
 
-      - name: Install Android SDK Command-line Tools
-        run: |
-          yes | sdkmanager --licenses || true
-          sdkmanager --install "cmdline-tools;latest" "platform-tools"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Start Android Emulator (x86_64)
+      - name: Start Android Emulator
         uses: ReactiveCircus/android-emulator-runner@v2
         with:
           api-level: 30
-          arch: x86_64  
+          arch: x86_64
           profile: pixel
-          target: google_apis
-          disable-animations: true
-          force-avd-creation: true
-          disable-linux-hw-accel: true
-          emulator-boot-timeout: 600000
-          emulator-options: "-no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim"
-          script: |
-            adb wait-for-device
-            adb shell input keyevent 82  # Unlock screen
+          script: adb shell input keyevent 82
 
       - name: Install Node.js & Appium
         run: |
-          sudo apt-get install -y nodejs npm
+          brew install node
           npm install -g appium
           appium -v
 
@@ -55,11 +45,10 @@ jobs:
       - name: Start Appium Server
         run: |
           appium server --base-path / --allow-insecure=adb_shell &
-          sleep 20
+          sleep 10  
 
       - name: Install Appium Settings App
         run: |
-          adb wait-for-device
           adb install $HOME/.appium/node_modules/appium-uiautomator2-driver/node_modules/io.appium.settings/apks/settings_apk-debug.apk || true
           adb shell pm grant io.appium.settings android.permission.SET_ANIMATION_SCALE
           adb shell pm grant io.appium.settings android.permission.CHANGE_CONFIGURATION
@@ -71,7 +60,7 @@ jobs:
 
       - name: Upload Cucumber HTML Report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4  # 🔹 Updated to v4
         with:
           name: cucumber-html-report
           path: androidcucumber/target/cucumber-reports/cucumber-report.html  
