@@ -8,7 +8,6 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.time.Duration;
 
@@ -18,7 +17,8 @@ public class AppiumDriverManager {
 
     public static void startServices() {
         try {
-            startEmulator("Pixel_9_API_35", "emulator-5554");
+            startEmulator();
+            ensureAppiumSettings();
             startAppiumServer();
         } catch (Exception e) {
             throw new RuntimeException("❌ Failed to start services.");
@@ -28,9 +28,14 @@ public class AppiumDriverManager {
     public static AppiumDriver getDriver() {
         if (driver == null) {
             try {
+                String deviceName = getConnectedDeviceName();
+                if (deviceName == null) {
+                    throw new RuntimeException("❌ No emulator detected.");
+                }
+
                 DesiredCapabilities caps = new DesiredCapabilities();
                 caps.setCapability("platformName", "Android");
-                caps.setCapability("appium:deviceName", "emulator-5554");
+                caps.setCapability("appium:deviceName", deviceName);
                 caps.setCapability("appium:app", "https://github.com/saucelabs/sample-app-mobile/releases/download/2.7.1/Android.SauceLabs.Mobile.Sample.app.2.7.1.apk");
                 caps.setCapability("appium:automationName", "UiAutomator2");
                 caps.setCapability("appium:appActivity", "com.swaglabsmobileapp.SplashActivity");
@@ -62,20 +67,36 @@ public class AppiumDriverManager {
         stopEmulator();
     }
 
-    private static void startEmulator(String avdName, String emulatorName) throws IOException, InterruptedException {
+    private static void ensureAppiumSettings() throws IOException, InterruptedException {
+        System.out.println("🔍 Checking if Appium Settings app is installed...");
+        Process process = Runtime.getRuntime().exec("adb shell pm list packages | grep io.appium.settings");
+        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+        String line = reader.readLine();
+
+        if (line == null || !line.contains("io.appium.settings")) {
+            System.out.println("⚠️ Appium Settings app not found. Installing...");
+            Runtime.getRuntime().exec("adb install ~/.appium/node_modules/appium-uiautomator2-driver/node_modules/io.appium.settings/apks/settings_apk-debug.apk");
+            Thread.sleep(5000);
+        }
+    }
+
+
+    private static void startEmulator() throws IOException, InterruptedException {
+        String avdName = "Pixel_9_API_35";  // Default AVD for GitHub Actions
         int retries = 60;
         int waitTime = 2000;
         boolean emulatorStarted = false;
 
         for (int i = 0; i < retries; i++) {
-            if (isEmulatorRunning(emulatorName)) {
-                System.out.println("✅ Emulator is running: " + emulatorName);
+            String detectedDevice = getConnectedDeviceName();
+            if (detectedDevice != null) {
+                System.out.println("✅ Emulator is running: " + detectedDevice);
                 return;
             }
 
             if (!emulatorStarted) {
                 System.out.println("🚀 Starting Emulator: " + avdName);
-                Runtime.getRuntime().exec("emulator -avd " + avdName);
+                Runtime.getRuntime().exec("emulator -avd " + avdName + " -no-window -no-audio -gpu off");
                 emulatorStarted = true;
             }
 
@@ -86,16 +107,16 @@ public class AppiumDriverManager {
         throw new RuntimeException("❌ Failed to initialize Emulator.");
     }
 
-    private static boolean isEmulatorRunning(String emulatorName) throws IOException {
+    private static String getConnectedDeviceName() throws IOException {
         Process process = Runtime.getRuntime().exec("adb devices");
         BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
         String line;
         while ((line = reader.readLine()) != null) {
-            if (line.contains(emulatorName)) {
-                return true;
+            if (line.startsWith("emulator-")) {
+                return line.split("\t")[0];  // Extract emulator name
             }
         }
-        return false;
+        return null;
     }
 
     private static void startAppiumServer() throws IOException, InterruptedException {
@@ -150,9 +171,15 @@ public class AppiumDriverManager {
     private static void stopEmulator() {
         try {
             System.out.println("🛑 Stopping Emulator...");
-            Runtime.getRuntime().exec("adb -s emulator-5554 emu kill");
-            Thread.sleep(2000);
-            System.out.println("✅ Emulator stopped.");
+            String emulatorName = getConnectedDeviceName();
+
+            if (emulatorName != null) {
+                Runtime.getRuntime().exec("adb -s " + emulatorName + " emu kill");
+                Thread.sleep(3000);
+                System.out.println("✅ Emulator " + emulatorName + " stopped.");
+            } else {
+                System.out.println("⚠️ No emulator found to stop.");
+            }
         } catch (Exception e) {
             System.out.println("❌ Failed to stop Emulator: " + e.getMessage());
         }
