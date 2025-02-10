@@ -28,10 +28,16 @@ jobs:
         uses: ReactiveCircus/android-emulator-runner@v2
         with:
           api-level: 30
-          arch: x86_64 
+          arch: x86_64  
           profile: pixel
           target: google_apis
-          script: adb shell input keyevent 82
+          disable-animations: true
+          hardware-profile: Nexus 5X
+          force-avd-creation: true
+          emulator-options: "-no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -accel off"
+          script: |
+            adb wait-for-device
+            adb shell input keyevent 82
 
       - name: Install Node.js & Appium
         run: |
@@ -46,10 +52,11 @@ jobs:
       - name: Start Appium Server
         run: |
           appium server --base-path / --allow-insecure=adb_shell &
-          sleep 10  
+          sleep 15  
 
       - name: Install Appium Settings App
         run: |
+          adb wait-for-device
           adb install $HOME/.appium/node_modules/appium-uiautomator2-driver/node_modules/io.appium.settings/apks/settings_apk-debug.apk || true
           adb shell pm grant io.appium.settings android.permission.SET_ANIMATION_SCALE
           adb shell pm grant io.appium.settings android.permission.CHANGE_CONFIGURATION
