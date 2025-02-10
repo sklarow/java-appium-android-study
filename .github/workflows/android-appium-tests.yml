@@ -1,0 +1,73 @@
+name: Android Appium Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-latest  
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'maven'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Start Android Emulator
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          profile: pixel
+          script: adb shell input keyevent 82
+
+      - name: Install Node.js & Appium
+        run: |
+          brew install node
+          npm install -g appium
+          appium -v
+
+      - name: Install Appium Drivers
+        run: |
+          appium driver install uiautomator2
+
+      - name: Start Appium Server
+        run: |
+          appium server --base-path / --allow-insecure=adb_shell &
+          sleep 10  
+
+      - name: Install Appium Settings App
+        run: |
+          adb install $HOME/.appium/node_modules/appium-uiautomator2-driver/node_modules/io.appium.settings/apks/settings_apk-debug.apk || true
+          adb shell pm grant io.appium.settings android.permission.SET_ANIMATION_SCALE
+          adb shell pm grant io.appium.settings android.permission.CHANGE_CONFIGURATION
+          adb shell pm grant io.appium.settings android.permission.ACCESS_FINE_LOCATION
+
+      - name: Run Cucumber Tests
+        run: mvn clean test
+        working-directory: androidcucumber  
+
+      - name: Upload Cucumber HTML Report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: cucumber-html-report
+          path: androidcucumber/target/cucumber-reports/cucumber-report.html  
+
+      - name: Deploy Report to GitHub Pages
+        if: success()
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: androidcucumber/target/cucumber-reports  
