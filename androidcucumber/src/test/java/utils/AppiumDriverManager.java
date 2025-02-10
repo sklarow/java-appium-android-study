@@ -22,12 +22,19 @@ public class AppiumDriverManager {
                 caps.setCapability("appium:fullReset", true);
                 caps.setCapability("appium:appWaitActivity", "*");
 
-                //Pay attention to the UREL for Appium 2, (without /wd/hub)
+                //Pay attention to the URL for Appium 2 (without /wd/hub)
                 driver = new AndroidDriver(new URL("http://127.0.0.1:4723/"), caps);
             } catch (MalformedURLException e) {
                 e.printStackTrace();
             }
         }
         return driver;
+    }
+
+    public static void quitDriver() {
+        if (driver != null) {
+            driver.quit();
+            driver = null; // Ensure cleanup
+        }
     }
 }
