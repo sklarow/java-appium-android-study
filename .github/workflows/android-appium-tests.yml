@@ -10,7 +10,7 @@ on:
 
 jobs:
   test:
-    runs-on: macos-latest  # Ensure MacOS runner for emulator support
+    runs-on: macos-latest 
 
     steps:
       - name: Install tar (Linux/macOS)
@@ -30,11 +30,36 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - name: Install Android SDK Dependencies
-        run: sdkmanager --install "system-images;android-30;google_apis;x86_64"
+      - name: Install Android SDK
+        run: |
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
+          export ANDROID_HOME=$ANDROID_SDK_ROOT
+          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH
+          
+          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          mkdir -p $ANDROID_SDK_ROOT/licenses
+          
+          curl -fsSL https://dl.google.com/android/repository/commandlinetools-mac-10406996_latest.zip -o sdk-tools.zip
+          unzip sdk-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
+          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
+
+          echo -e "84831b9409646a918e30573bab4c9c91346d8abd" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
+          sdkmanager --list
+
+      - name: Install Android System Image
+        run: |
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
+          export ANDROID_HOME=$ANDROID_SDK_ROOT
+          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH
+          
+          sdkmanager --install "system-images;android-30;google_apis;x86_64"
 
       - name: Create AVD
         run: |
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
+          export ANDROID_HOME=$ANDROID_SDK_ROOT
+          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH
+
           avdmanager create avd \
             --name pixel_api30 \
             --package "system-images;android-30;google_apis;x86_64" \
@@ -43,9 +68,9 @@ jobs:
 
       - name: Start Emulator and Wait for Boot
         run: |
-          export PATH=${ANDROID_HOME}/tools:${ANDROID_HOME}/platform-tools:${PATH}
+          export PATH=$ANDROID_HOME/tools:$ANDROID_HOME/platform-tools:$PATH
           
-          nohup ${ANDROID_HOME}/emulator/emulator -avd pixel_api30 \
+          nohup $ANDROID_HOME/emulator/emulator -avd pixel_api30 \
             -no-audio -no-boot-anim -no-window -gpu swiftshader -no-snapshot \
             -camera-back none -camera-front none > emulator.log 2>&1 &
 
@@ -95,3 +120,20 @@ jobs:
         run: |
           cd androidcucumber
           mvn clean test -Dmaven.test.failure.ignore=true -X
+
+
+      - name: Upload Test Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            androidcucumber/target/cucumber-reports/
+            androidcucumber/target/surefire-reports/
+          if-no-files-found: warn
+
+      - name: Deploy Cucumber Reports to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: 
