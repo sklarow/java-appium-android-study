@@ -25,18 +25,58 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Create AVD and Start Emulator
+      - name: Setup Android SDK tools
         run: |
-          sdkmanager "system-images;android-30;google_apis;x86_64"
-          echo "no" | avdmanager create avd -n test_device -k "system-images;android-30;google_apis;x86_64" --force
-          $ANDROID_HOME/emulator/emulator -list-avds
-          nohup $ANDROID_HOME/emulator/emulator -avd test_device -no-audio -no-boot-anim -no-window -gpu swiftshader_indirect -camera-back none -camera-front none &
-          $ANDROID_HOME/platform-tools/adb wait-for-device shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done'
-          $ANDROID_HOME/platform-tools/adb devices
-          $ANDROID_HOME/platform-tools/adb shell input keyevent 82
-          $ANDROID_HOME/platform-tools/adb shell settings put global window_animation_scale 0
-          $ANDROID_HOME/platform-tools/adb shell settings put global transition_animation_scale 0
-          $ANDROID_HOME/platform-tools/adb shell settings put global animator_duration_scale 0
+          echo "y" | sdkmanager "platform-tools" "emulator"
+          echo "y" | sdkmanager "system-images;android-30;google_apis;x86_64"
+          echo "y" | sdkmanager --licenses
+
+      - name: Create and Start Emulator
+        run: |
+          # Create AVD
+          echo "no" | avdmanager create avd \
+            --name pixel_api30 \
+            --package "system-images;android-30;google_apis;x86_64" \
+            --device "pixel" \
+            --force
+
+          # Start emulator with specific flags to address graphics issues
+          nohup $ANDROID_HOME/emulator/emulator \
+            -avd pixel_api30 \
+            -no-audio \
+            -no-boot-anim \
+            -no-window \
+            -no-snapshot \
+            -gpu swiftshader \
+            -cores 1 \
+            -memory 2048 \
+            -no-snapshot-load \
+            -no-snapshot-save \
+            -camera-back none \
+            -camera-front none \
+            -qemu -lcd-density 420 &
+
+          # Wait for device to be fully booted
+          echo "Waiting for emulator to start..."
+          adb wait-for-device
+          
+          # More reliable boot completion check
+          while [[ -z $(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r') ]]; do
+            echo "Waiting for boot completion..."
+            sleep 5
+          done
+          
+          # Verify device is available
+          adb devices
+          adb shell input keyevent 82
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
+
+          # Print device status for debugging
+          echo "Device Status:"
+          adb shell getprop sys.boot_completed
+          adb shell dumpsys window displays
 
       - name: Install Node.js & Appium
         run: |
@@ -47,64 +87,47 @@ jobs:
 
       - name: Start Appium Server
         run: |
-          appium server --base-path / --allow-insecure=adb_shell --log-timestamp --debug &
+          appium server --base-path / --allow-insecure=adb_shell --log appium.log &
           sleep 15
-
-      - name: Verify Environment
-        run: |
-          echo "=== Android Home ==="
-          echo $ANDROID_HOME
-          echo "=== ADB Version ==="
-          adb version
-          echo "=== Connected Devices ==="
-          adb devices -l
-          echo "=== Emulator Status ==="
-          adb shell getprop sys.boot_completed
-          echo "=== Appium Status ==="
-          curl http://localhost:4723/status || echo "Appium server not responding"
+          
+          # Check if Appium is running
+          curl --silent --output /dev/null --write-out "%{http_code}" http://localhost:4723/status || echo "Appium server not responding"
 
       - name: Run Cucumber Tests
         run: |
-          echo "=== Starting Tests ==="
+          # Print connected devices before running tests
+          echo "Connected devices:"
+          adb devices -l
+          
           cd androidcucumber
-          mkdir -p target/cucumber-reports
           mvn clean test -Dmaven.test.failure.ignore=true
         continue-on-error: true
 
-      - name: Check Test Results
-        run: |
-          echo "=== Test Results ==="
-          ls -la androidcucumber/target/cucumber-reports/ || echo "No reports directory"
-          echo "=== Full Target Directory ==="
-          ls -la androidcucumber/target/
-
-      - name: Upload Cucumber HTML Report
+      - name: Upload Appium Logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: cucumber-html-report
+          name: appium-logs
+          path: appium.log
+
+      - name: Upload Test Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
           path: |
             androidcucumber/target/cucumber-reports/
             androidcucumber/target/surefire-reports/
           if-no-files-found: warn
 
-      - name: Create gh-pages branch if it doesn't exist
+      - name: Initialize gh-pages branch
         if: always()
         run: |
-          git checkout --orphan gh-pages || git checkout gh-pages
-          git rm -rf . || true
-          git clean -fd
-          echo "# Test Reports" > README.md
-          git add README.md
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
-          git commit -m "Initial gh-pages commit"
-          git push origin gh-pages || git push -f origin gh-pages
-
-      - name: Deploy Report to GitHub Pages
-        if: always()
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: androidcucumber/target/cucumber-reports
-          force_orphan: true
+          git checkout --orphan gh-pages
+          git reset --hard
+          echo "# Test Reports" > README.md
+          git add README.md
+          git commit -m "Initialize gh-pages branch"
+          git push origin gh-pages --force
