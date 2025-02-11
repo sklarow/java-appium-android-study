@@ -82,9 +82,10 @@ public class AppiumDriverManager {
 
 
     private static void startEmulator() throws IOException, InterruptedException {
-        String avdName = "Pixel_9_API_35";  // Default AVD for GitHub Actions
-        int retries = 60;
-        int waitTime = 2000;
+        String avdName = getAvailableAVD();
+        System.out.println("🔍 Using AVD: " + avdName);
+        int retries = 100;
+        int waitTime = 10000;
         boolean emulatorStarted = false;
 
         for (int i = 0; i < retries; i++) {
@@ -105,6 +106,13 @@ public class AppiumDriverManager {
         }
 
         throw new RuntimeException("❌ Failed to initialize Emulator.");
+    }
+
+    private static String getAvailableAVD() throws IOException {
+        Process process = Runtime.getRuntime().exec("emulator -list-avds");
+        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+        String avdName = reader.readLine();
+        return (avdName != null) ? avdName.trim() : "Pixel_4_API_30";
     }
 
     private static String getConnectedDeviceName() throws IOException {
