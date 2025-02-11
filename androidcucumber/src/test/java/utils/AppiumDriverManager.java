@@ -21,10 +21,10 @@ public class AppiumDriverManager {
             ensureAppiumSettings();
             startAppiumServer();
         } catch (Exception e) {
-            throw new RuntimeException("❌ Failed to start services.");
+            e.printStackTrace();
+            throw new RuntimeException("❌ Failed to start services.", e);
         }
     }
-
     public static AppiumDriver getDriver() {
         if (driver == null) {
             try {
