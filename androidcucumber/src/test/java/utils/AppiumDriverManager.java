@@ -56,6 +56,7 @@ public class AppiumDriverManager {
                 System.out.println("✅ Appium Driver Initialized Successfully");
 
             } catch (Exception e) {
+                e.printStackTrace();
                 throw new RuntimeException("❌ Failed to initialize Appium Driver.");
             }
         }
