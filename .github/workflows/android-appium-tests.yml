@@ -1,43 +1,41 @@
-name: Android Appium Tests
+name: Android UI Tests
 
 on:
   push:
     branches:
       - main
   pull_request:
+    branches:
+      - main
 
 jobs:
   test:
-    runs-on: macos-13
-    timeout-minutes: 45
-
-    env:
-      ANDROID_HOME: /Users/runner/Library/Android/sdk
-      PATH: ${PATH}:${ANDROID_HOME}/tools:${ANDROID_HOME}/platform-tools
+    runs-on: macos-latest  # Ensure MacOS runner for emulator support
 
     steps:
+      - name: Install tar (Linux/macOS)
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get update && sudo apt-get install -y tar
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            brew install gnu-tar
+          fi
+
+      - name: Verify tar Installation
+        run: which tar || echo "tar is missing!"
+
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
         with:
-          distribution: 'temurin'
-          java-version: '17'
-          cache: 'maven'
+          persist-credentials: false
+          fetch-depth: 0
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Setup Android SDK tools
-        run: |
-          echo "y" | sdkmanager "platform-tools" "emulator"
-          echo "y" | sdkmanager "system-images;android-30;google_apis;x86_64"
-          echo "y" | sdkmanager --licenses
+      - name: Install Android SDK Dependencies
+        run: sdkmanager --install "system-images;android-30;google_apis;x86_64"
 
       - name: Create AVD
         run: |
-          echo "no" | avdmanager create avd \
+          avdmanager create avd \
             --name pixel_api30 \
             --package "system-images;android-30;google_apis;x86_64" \
             --device "pixel" \
@@ -45,50 +43,40 @@ jobs:
 
       - name: Start Emulator and Wait for Boot
         run: |
-          # Export paths explicitly
           export PATH=${ANDROID_HOME}/tools:${ANDROID_HOME}/platform-tools:${PATH}
           
-          # Start emulator
-          nohup ${ANDROID_HOME}/emulator/emulator \
-            -avd pixel_api30 \
-            -no-audio \
-            -no-boot-anim \
-            -no-window \
-            -gpu swiftshader \
-            -no-snapshot \
-            -camera-back none \
-            -camera-front none &
+          nohup ${ANDROID_HOME}/emulator/emulator -avd pixel_api30 \
+            -no-audio -no-boot-anim -no-window -gpu swiftshader -no-snapshot \
+            -camera-back none -camera-front none > emulator.log 2>&1 &
 
-          # Wait for device with timeout
-          timeout 300 adb wait-for-device
-          
-          # Wait for boot complete
-          while [[ -z $(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r') ]]; do
-            echo "Waiting for boot completion..."
+          echo "Waiting for ADB to detect device..."
+          adb wait-for-device
+
+          until adb shell getprop sys.boot_completed | grep -m 1 "1"; do
+            echo "Device is still booting..."
             sleep 5
           done
-          
-          # Verify device state
-          echo "Device State:"
-          adb devices -l
-          adb shell getprop sys.boot_completed
+          echo "Device is fully booted."
+
+          # Unlock screen
+          adb shell input keyevent 82
+
+          # Disable animations
           adb shell settings put global window_animation_scale 0
           adb shell settings put global transition_animation_scale 0
           adb shell settings put global animator_duration_scale 0
 
       - name: Install Node.js & Appium
         run: |
-          brew install node
+          curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+          sudo apt-get install -y nodejs
           npm install -g appium@2.2.1
           appium driver install uiautomator2
-          appium driver list
 
       - name: Start Appium Server
         run: |
-          appium server --base-path / --allow-insecure=adb_shell --log appium.log --debug &
+          nohup appium server --base-path / --allow-insecure=adb_shell --log appium.log --debug > appium.log 2>&1 &
           sleep 15
-          
-          # Verify Appium server
           curl -s http://localhost:4723/status
 
       - name: Verify Environment
@@ -107,19 +95,3 @@ jobs:
         run: |
           cd androidcucumber
           mvn clean test -Dmaven.test.failure.ignore=true -X
-
-      - name: Upload Test Reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-reports
-          path: |
-            androidcucumber/target/cucumber-reports/
-            androidcucumber/target/surefire-reports/
-          if-no-files-found: warn
-
-      - name: Deploy Cucumber Reports to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: androidcucumber/target/cucumber-reports/
