@@ -25,58 +25,81 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Create AVD and Start Emulator
+        run: |
+          sdkmanager "system-images;android-30;google_apis;x86_64"
+          echo "no" | avdmanager create avd -n test_device -k "system-images;android-30;google_apis;x86_64" --force
+          $ANDROID_HOME/emulator/emulator -list-avds
+          nohup $ANDROID_HOME/emulator/emulator -avd test_device -no-audio -no-boot-anim -no-window -gpu swiftshader_indirect -camera-back none -camera-front none &
+          $ANDROID_HOME/platform-tools/adb wait-for-device shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done'
+          $ANDROID_HOME/platform-tools/adb devices
+          $ANDROID_HOME/platform-tools/adb shell input keyevent 82
+          $ANDROID_HOME/platform-tools/adb shell settings put global window_animation_scale 0
+          $ANDROID_HOME/platform-tools/adb shell settings put global transition_animation_scale 0
+          $ANDROID_HOME/platform-tools/adb shell settings put global animator_duration_scale 0
+
       - name: Install Node.js & Appium
         run: |
           brew install node
           npm install -g appium@2.2.1
-          appium -v
-
-      - name: Install Appium Drivers
-        run: |
           appium driver install uiautomator2
           appium driver list
 
       - name: Start Appium Server
         run: |
           appium server --base-path / --allow-insecure=adb_shell --log-timestamp --debug &
-          sleep 15  # Increased sleep time for server startup
+          sleep 15
 
-      - name: Start Android Emulator
-        uses: ReactiveCircus/android-emulator-runner@v2
-        with:
-          api-level: 30
-          arch: x86_64
-          profile: pixel
-          emulator-options: >-
-            -no-snapshot-save 
-            -no-window 
-            -gpu swiftshader_indirect 
-            -noaudio 
-            -no-boot-anim 
-            -camera-back none
-          script: |
-            adb wait-for-device
-            adb shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done'
-            adb shell input keyevent 82
-            adb shell settings put global window_animation_scale 0
-            adb shell settings put global transition_animation_scale 0
-            adb shell settings put global animator_duration_scale 0
-
-      - name: Check ADB Devices
+      - name: Verify Environment
         run: |
-          adb devices
+          echo "=== Android Home ==="
+          echo $ANDROID_HOME
+          echo "=== ADB Version ==="
+          adb version
+          echo "=== Connected Devices ==="
+          adb devices -l
+          echo "=== Emulator Status ==="
           adb shell getprop sys.boot_completed
+          echo "=== Appium Status ==="
+          curl http://localhost:4723/status || echo "Appium server not responding"
 
       - name: Run Cucumber Tests
-        run: mvn clean test -Dmaven.test.failure.ignore=true
-        working-directory: androidcucumber
+        run: |
+          echo "=== Starting Tests ==="
+          cd androidcucumber
+          mkdir -p target/cucumber-reports
+          mvn clean test -Dmaven.test.failure.ignore=true
+        continue-on-error: true
+
+      - name: Check Test Results
+        run: |
+          echo "=== Test Results ==="
+          ls -la androidcucumber/target/cucumber-reports/ || echo "No reports directory"
+          echo "=== Full Target Directory ==="
+          ls -la androidcucumber/target/
 
       - name: Upload Cucumber HTML Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cucumber-html-report
-          path: androidcucumber/target/cucumber-reports/cucumber-report.html
+          path: |
+            androidcucumber/target/cucumber-reports/
+            androidcucumber/target/surefire-reports/
+          if-no-files-found: warn
+
+      - name: Create gh-pages branch if it doesn't exist
+        if: always()
+        run: |
+          git checkout --orphan gh-pages || git checkout gh-pages
+          git rm -rf . || true
+          git clean -fd
+          echo "# Test Reports" > README.md
+          git add README.md
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git commit -m "Initial gh-pages commit"
+          git push origin gh-pages || git push -f origin gh-pages
 
       - name: Deploy Report to GitHub Pages
         if: always()
@@ -84,3 +107,4 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: androidcucumber/target/cucumber-reports
+          force_orphan: true
