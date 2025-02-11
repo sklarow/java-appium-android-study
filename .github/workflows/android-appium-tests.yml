@@ -47,20 +47,13 @@ jobs:
           appium server --base-path / --allow-insecure=adb_shell &
           sleep 10  
 
-      - name: Install Appium Settings App
-        run: |
-          adb install $HOME/.appium/node_modules/appium-uiautomator2-driver/node_modules/io.appium.settings/apks/settings_apk-debug.apk || true
-          adb shell pm grant io.appium.settings android.permission.SET_ANIMATION_SCALE
-          adb shell pm grant io.appium.settings android.permission.CHANGE_CONFIGURATION
-          adb shell pm grant io.appium.settings android.permission.ACCESS_FINE_LOCATION
-
       - name: Run Cucumber Tests
         run: mvn clean test
         working-directory: androidcucumber  
 
       - name: Upload Cucumber HTML Report
         if: always()
-        uses: actions/upload-artifact@v4  # 🔹 Updated to v4
+        uses: actions/upload-artifact@v4
         with:
           name: cucumber-html-report
           path: androidcucumber/target/cucumber-reports/cucumber-report.html  
