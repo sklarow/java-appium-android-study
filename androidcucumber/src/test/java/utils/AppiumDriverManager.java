@@ -137,7 +137,12 @@ public class AppiumDriverManager {
     }
 
     private static String getAvailableAVD() throws IOException {
-        Process process = Runtime.getRuntime().exec("emulator -list-avds");
+        String sdkHome = System.getenv("ANDROID_HOME");
+        String emulatorExecutable = "emulator"; // default fallback
+        if (sdkHome != null && !sdkHome.isEmpty()) {
+            emulatorExecutable = sdkHome + "/emulator/emulator";
+        }
+        Process process = Runtime.getRuntime().exec(emulatorExecutable + " -list-avds");
         BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
         String avdName = reader.readLine();
         return (avdName != null) ? avdName.trim() : "Pixel_4_API_30";
