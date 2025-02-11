@@ -3,15 +3,15 @@
 ## Introduction
 This project is designed to automate the testing of the Swag Labs Android application using **Appium, Cucumber, and Java**. The framework ensures a **graceful execution of Appium and Appium Server**, supports **emulator and real device testing**, and generates **Cucumber reports** that are published on a GitHub page.
 
-## Project execution report
-The latests project execution report can be found in here:
+## Test Execution Report
+The latest test execution report can be found in here:
 https://sklarow.github.io/java-appium-android-study
 
 ## Project Overview
 This project is a study of implementation of Appium to test the Android app provided by Sauce Labs that can be found here:
 https://github.com/saucelabs/sample-app-mobile/releases
 
-It was developed to practice the following stack
+It was developed to practice the following stack:
 - Cucumber Framework
 - Appium
 - Java Programming Language
@@ -89,12 +89,27 @@ Future improvements include:
 - **Parallel execution of tests on multiple devices.**
 - **Integration with cloud-based testing platforms (e.g., Sauce Labs, BrowserStack).**
 - **Enhanced reporting and analytics for test results.**
-- **Support for iOS automation.**
 - **More robust error handling for flaky test cases.**
 - **Optimization of test execution time and resource usage.**
 
 ## Conclusion
 This project efficiently automates Android app testing using **Appium and Cucumber BDD**, ensuring smooth execution, **server management**, and **reporting via GitHub pages**. The test framework follows best practices, making it scalable and maintainable for future enhancements.
+
+## To take a look:
+The execution report:
+https://sklarow.github.io/java-appium-android-study
+
+A Successfull job run:
+https://github.com/sklarow/java-appium-android-study/actions/runs/13263927683/job/37026579927
+
+The worflow file:
+https://github.com/sklarow/java-appium-android-study/blob/main/.github/workflows/android-appium-tests.yml
+
+The feature files:
+https://github.com/sklarow/java-appium-android-study/tree/200cc73c6b147005370abe53f4e3ad6932ec760b/androidcucumber/src/test/resources/androidcucumber
+
+The Appium Driver Manager:
+https://github.com/sklarow/java-appium-android-study/blob/200cc73c6b147005370abe53f4e3ad6932ec760b/androidcucumber/src/test/java/utils/AppiumDriverManager.java
 
 
 ---
