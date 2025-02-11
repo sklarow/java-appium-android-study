@@ -11,6 +11,10 @@ jobs:
     runs-on: macos-13
     timeout-minutes: 45
 
+    env:
+      ANDROID_HOME: /Users/runner/Library/Android/sdk
+      PATH: ${PATH}:${ANDROID_HOME}/tools:${ANDROID_HOME}/platform-tools
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -31,52 +35,46 @@ jobs:
           echo "y" | sdkmanager "system-images;android-30;google_apis;x86_64"
           echo "y" | sdkmanager --licenses
 
-      - name: Create and Start Emulator
+      - name: Create AVD
         run: |
-          # Create AVD
           echo "no" | avdmanager create avd \
             --name pixel_api30 \
             --package "system-images;android-30;google_apis;x86_64" \
             --device "pixel" \
             --force
 
-          # Start emulator with specific flags to address graphics issues
-          nohup $ANDROID_HOME/emulator/emulator \
+      - name: Start Emulator and Wait for Boot
+        run: |
+          # Export paths explicitly
+          export PATH=${ANDROID_HOME}/tools:${ANDROID_HOME}/platform-tools:${PATH}
+          
+          # Start emulator
+          nohup ${ANDROID_HOME}/emulator/emulator \
             -avd pixel_api30 \
             -no-audio \
             -no-boot-anim \
             -no-window \
-            -no-snapshot \
             -gpu swiftshader \
-            -cores 1 \
-            -memory 2048 \
-            -no-snapshot-load \
-            -no-snapshot-save \
+            -no-snapshot \
             -camera-back none \
-            -camera-front none \
-            -qemu -lcd-density 420 &
+            -camera-front none &
 
-          # Wait for device to be fully booted
-          echo "Waiting for emulator to start..."
-          adb wait-for-device
+          # Wait for device with timeout
+          timeout 300 adb wait-for-device
           
-          # More reliable boot completion check
+          # Wait for boot complete
           while [[ -z $(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r') ]]; do
             echo "Waiting for boot completion..."
             sleep 5
           done
           
-          # Verify device is available
-          adb devices
-          adb shell input keyevent 82
+          # Verify device state
+          echo "Device State:"
+          adb devices -l
+          adb shell getprop sys.boot_completed
           adb shell settings put global window_animation_scale 0
           adb shell settings put global transition_animation_scale 0
           adb shell settings put global animator_duration_scale 0
-
-          # Print device status for debugging
-          echo "Device Status:"
-          adb shell getprop sys.boot_completed
-          adb shell dumpsys window displays
 
       - name: Install Node.js & Appium
         run: |
@@ -87,28 +85,28 @@ jobs:
 
       - name: Start Appium Server
         run: |
-          appium server --base-path / --allow-insecure=adb_shell --log appium.log &
+          appium server --base-path / --allow-insecure=adb_shell --log appium.log --debug &
           sleep 15
           
-          # Check if Appium is running
-          curl --silent --output /dev/null --write-out "%{http_code}" http://localhost:4723/status || echo "Appium server not responding"
+          # Verify Appium server
+          curl -s http://localhost:4723/status
+
+      - name: Verify Environment
+        run: |
+          echo "=== Environment Variables ==="
+          echo "ANDROID_HOME: $ANDROID_HOME"
+          echo "PATH: $PATH"
+          
+          echo "=== Connected Devices ==="
+          adb devices -l
+          
+          echo "=== Appium Status ==="
+          curl -s http://localhost:4723/status
 
       - name: Run Cucumber Tests
         run: |
-          # Print connected devices before running tests
-          echo "Connected devices:"
-          adb devices -l
-          
           cd androidcucumber
-          mvn clean test -Dmaven.test.failure.ignore=true
-        continue-on-error: true
-
-      - name: Upload Appium Logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: appium-logs
-          path: appium.log
+          mvn clean test -Dmaven.test.failure.ignore=true -X
 
       - name: Upload Test Reports
         if: always()
@@ -120,14 +118,8 @@ jobs:
             androidcucumber/target/surefire-reports/
           if-no-files-found: warn
 
-      - name: Initialize gh-pages branch
-        if: always()
-        run: |
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
-          git checkout --orphan gh-pages
-          git reset --hard
-          echo "# Test Reports" > README.md
-          git add README.md
-          git commit -m "Initialize gh-pages branch"
-          git push origin gh-pages --force
+      - name: Deploy Cucumber Reports to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: androidcucumber/target/cucumber-reports/

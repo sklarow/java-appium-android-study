@@ -39,8 +39,16 @@ public class AppiumDriverManager {
                 caps.setCapability("appium:app", "https://github.com/saucelabs/sample-app-mobile/releases/download/2.7.1/Android.SauceLabs.Mobile.Sample.app.2.7.1.apk");
                 caps.setCapability("appium:automationName", "UiAutomator2");
                 caps.setCapability("appium:appActivity", "com.swaglabsmobileapp.SplashActivity");
+                caps.setCapability("appium:noReset", false);
                 caps.setCapability("appium:fullReset", true);
+                caps.setCapability("appium:autoGrantPermissions", true);
+                caps.setCapability("appium:newCommandTimeout", 90);
+                caps.setCapability("appium:adbExecTimeout", 120000);
                 caps.setCapability("appium:appWaitActivity", "*");
+                caps.setCapability("appium:appWaitDuration", 60000);
+                caps.setCapability("appium:androidInstallTimeout", 120000);
+
+                System.out.println("🔍 Initializing driver with capabilities: " + caps.toString());
 
                 driver = new AndroidDriver(new URL("http://127.0.0.1:4723/"), caps);
                 driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(10));
