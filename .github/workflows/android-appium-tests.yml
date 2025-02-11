@@ -1,118 +1,52 @@
-name: Android UI Tests
+name: Appium Cucumber Test
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
 
 jobs:
   test:
     runs-on: ubuntu-latest
-
     steps:
-      # 1. Check out the repository.
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Enable KVM permissions
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v3
         with:
-          persist-credentials: false
-          fetch-depth: 0
+          distribution: 'temurin'
+          java-version: '11'
+          cache: maven
 
-      # 2. Set up Android SDK environment variables and update PATH.
-      - name: Setup Android Environment
-        run: |
-          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-          # Add SDK tools to PATH.
-          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
-          echo "$HOME/android-sdk/emulator" >> $GITHUB_PATH
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '14'
 
-      # 3. Install required tools (tar, unzip, wget, Node.js).
-      - name: Install Prerequisites
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y tar unzip wget
-          # Install Node.js (v18) via Nodesource.
-          curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-          sudo apt-get install -y nodejs
-
-      # 4. Install the Android Command Line Tools.
-      - name: Install Android SDK Tools
-        run: |
-          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-          mkdir -p $ANDROID_SDK_ROOT/licenses
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip -O sdk-tools.zip
-          unzip sdk-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
-          # Rename the extracted folder to "latest" so that sdkmanager and avdmanager are available.
-          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
-          # Accept the SDK license.
-          echo "84831b9409646a918e30573bab4c9c91346d8abd" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
-          sdkmanager --list
-
-      # 5. Install the desired Android system image.
-      - name: Install Android System Image
-        run: |
-          sdkmanager --install "system-images;android-30;google_apis;x86_64"
-
-      # 6. Create an Android Virtual Device (AVD).
-      - name: Create AVD
-        run: |
-          avdmanager create avd \
-            --name pixel_api30 \
-            --package "system-images;android-30;google_apis;x86_64" \
-            --device "pixel" \
-            --force
-
-      # 7. Start the emulator, wait for boot completion, unlock the device, and disable animations.
-      - name: Start Emulator and Wait for Boot
-        run: |
-          nohup emulator -avd pixel_api30 \
-            -no-audio -no-boot-anim -no-window -gpu swiftshader -no-snapshot \
-            -camera-back none -camera-front none > emulator.log 2>&1 &
-          echo "Waiting for ADB to detect device..."
-          adb wait-for-device
-          until adb shell getprop sys.boot_completed | grep -m 1 "1"; do
-            echo "Device is still booting..."
-            sleep 5
-          done
-          echo "Device is fully booted."
-          # Unlock the device and disable animations.
-          adb shell input keyevent 82
-          adb shell settings put global window_animation_scale 0
-          adb shell settings put global transition_animation_scale 0
-          adb shell settings put global animator_duration_scale 0
-
-      # 8. Install Appium and its uiautomator2 driver.
-      - name: Install Appium and Drivers
-        run: |
-          npm install -g appium@2.2.1
-          appium driver install uiautomator2
-
-      # 9. Start the Appium server.
       - name: Start Appium Server
         run: |
-          nohup appium server --base-path / --allow-insecure=adb_shell --log appium.log --debug > appium.log 2>&1 &
-          sleep 15
-          curl -s http://localhost:4723/status
+          npm install -g appium
+          appium &
 
-      # 10. Verify the environment (print key env vars, list connected devices, and check Appium status).
-      - name: Verify Environment
-        run: |
-          echo "=== Environment Variables ==="
-          echo "ANDROID_HOME: $ANDROID_HOME"
-          echo "PATH: $PATH"
-          echo "=== Connected Devices ==="
-          adb devices -l
-          echo "=== Appium Status ==="
-          curl -s http://localhost:4723/status
+      - name: Run Android Emulator and execute tests
+        uses: ReactiveCircus/android-emulator-runner@v2.33.0
+        with:
+          api-level: 29
+          target: google_apis
+          arch: x86_64
+          profile: Nexus 6
+          emulator-options: "-no-window -gpu swiftshader_indirect -noaudio -no-boot-anim"
+          disable-animations: true
+          script: mvn clean test -Pappium-cucumber
 
-      # 11. Run the Cucumber tests via Maven.
-      - name: Run Cucumber Tests
-        working-directory: androidcucumber
-        run: mvn clean test -Dmaven.test.failure.ignore=true -X
-
-      # 12. Upload test reports as artifacts.
       - name: Upload Test Reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -123,7 +57,6 @@ jobs:
             androidcucumber/target/surefire-reports/
           if-no-files-found: warn
 
-      # 13. Deploy the Cucumber reports to GitHub Pages.
       - name: Deploy Cucumber Reports to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
