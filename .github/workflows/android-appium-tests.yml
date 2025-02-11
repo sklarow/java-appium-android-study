@@ -48,7 +48,7 @@ jobs:
 
       - name: Start Appium Server
         run: appium --base-path "/" --allow-insecure=adb_shell &
-        
+
       - name: Run Android Emulator and execute tests
         uses: ReactiveCircus/android-emulator-runner@v2.33.0
         with:
@@ -65,15 +65,8 @@ jobs:
           channel: stable
           script: mvn clean test
 
-      - name: Upload Test Reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-reports
-          path: |
-            androidcucumber/target/cucumber-reports/
-            androidcucumber/target/surefire-reports/
-          if-no-files-found: warn
+      - name: Copy cucumber-report.html to index.html
+        run: cp androidcucumber/target/cucumber-reports/cucumber-report.html androidcucumber/target/cucumber-reports/index.html
 
       - name: Deploy Cucumber Reports to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
