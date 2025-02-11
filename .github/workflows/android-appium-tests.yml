@@ -2,126 +2,117 @@ name: Android UI Tests
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
   test:
-    runs-on: macos-latest 
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Install tar (Linux/macOS)
-        run: |
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            sudo apt-get update && sudo apt-get install -y tar
-          elif [[ "$RUNNER_OS" == "macOS" ]]; then
-            brew install gnu-tar
-          fi
-
-      - name: Verify tar Installation
-        run: which tar || echo "tar is missing!"
-
+      # 1. Check out the repository.
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           persist-credentials: false
           fetch-depth: 0
 
-      - name: Install Android SDK
+      # 2. Set up Android SDK environment variables and update PATH.
+      - name: Setup Android Environment
         run: |
-          export ANDROID_SDK_ROOT=$HOME/android-sdk
-          export ANDROID_HOME=$ANDROID_SDK_ROOT
-          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH
-          
+          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          # Add SDK tools to PATH.
+          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
+          echo "$HOME/android-sdk/emulator" >> $GITHUB_PATH
+
+      # 3. Install required tools (tar, unzip, wget, Node.js).
+      - name: Install Prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tar unzip wget
+          # Install Node.js (v18) via Nodesource.
+          curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+          sudo apt-get install -y nodejs
+
+      # 4. Install the Android Command Line Tools.
+      - name: Install Android SDK Tools
+        run: |
           mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
           mkdir -p $ANDROID_SDK_ROOT/licenses
-          
-          curl -fsSL https://dl.google.com/android/repository/commandlinetools-mac-10406996_latest.zip -o sdk-tools.zip
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip -O sdk-tools.zip
           unzip sdk-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
+          # Rename the extracted folder to "latest" so that sdkmanager and avdmanager are available.
           mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
-
-          echo -e "84831b9409646a918e30573bab4c9c91346d8abd" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
+          # Accept the SDK license.
+          echo "84831b9409646a918e30573bab4c9c91346d8abd" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
           sdkmanager --list
 
+      # 5. Install the desired Android system image.
       - name: Install Android System Image
         run: |
-          export ANDROID_SDK_ROOT=$HOME/android-sdk
-          export ANDROID_HOME=$ANDROID_SDK_ROOT
-          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH
-          
           sdkmanager --install "system-images;android-30;google_apis;x86_64"
 
+      # 6. Create an Android Virtual Device (AVD).
       - name: Create AVD
         run: |
-          export ANDROID_SDK_ROOT=$HOME/android-sdk
-          export ANDROID_HOME=$ANDROID_SDK_ROOT
-          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH
-
           avdmanager create avd \
             --name pixel_api30 \
             --package "system-images;android-30;google_apis;x86_64" \
             --device "pixel" \
             --force
 
+      # 7. Start the emulator, wait for boot completion, unlock the device, and disable animations.
       - name: Start Emulator and Wait for Boot
         run: |
-          export PATH=$ANDROID_HOME/tools:$ANDROID_HOME/platform-tools:$PATH
-          
-          nohup $ANDROID_HOME/emulator/emulator -avd pixel_api30 \
+          nohup emulator -avd pixel_api30 \
             -no-audio -no-boot-anim -no-window -gpu swiftshader -no-snapshot \
             -camera-back none -camera-front none > emulator.log 2>&1 &
-
           echo "Waiting for ADB to detect device..."
           adb wait-for-device
-
           until adb shell getprop sys.boot_completed | grep -m 1 "1"; do
             echo "Device is still booting..."
             sleep 5
           done
           echo "Device is fully booted."
-
-          # Unlock screen
+          # Unlock the device and disable animations.
           adb shell input keyevent 82
-
-          # Disable animations
           adb shell settings put global window_animation_scale 0
           adb shell settings put global transition_animation_scale 0
           adb shell settings put global animator_duration_scale 0
 
-      - name: Install Node.js & Appium
+      # 8. Install Appium and its uiautomator2 driver.
+      - name: Install Appium and Drivers
         run: |
-          curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
-          sudo apt-get install -y nodejs
           npm install -g appium@2.2.1
           appium driver install uiautomator2
 
+      # 9. Start the Appium server.
       - name: Start Appium Server
         run: |
           nohup appium server --base-path / --allow-insecure=adb_shell --log appium.log --debug > appium.log 2>&1 &
           sleep 15
           curl -s http://localhost:4723/status
 
+      # 10. Verify the environment (print key env vars, list connected devices, and check Appium status).
       - name: Verify Environment
         run: |
           echo "=== Environment Variables ==="
           echo "ANDROID_HOME: $ANDROID_HOME"
           echo "PATH: $PATH"
-          
           echo "=== Connected Devices ==="
           adb devices -l
-          
           echo "=== Appium Status ==="
           curl -s http://localhost:4723/status
 
+      # 11. Run the Cucumber tests via Maven.
       - name: Run Cucumber Tests
-        run: |
-          cd androidcucumber
-          mvn clean test -Dmaven.test.failure.ignore=true -X
+        working-directory: androidcucumber
+        run: mvn clean test -Dmaven.test.failure.ignore=true -X
 
-
+      # 12. Upload test reports as artifacts.
       - name: Upload Test Reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -132,8 +123,9 @@ jobs:
             androidcucumber/target/surefire-reports/
           if-no-files-found: warn
 
+      # 13. Deploy the Cucumber reports to GitHub Pages.
       - name: Deploy Cucumber Reports to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: 
+          publish_dir: androidcucumber/target/cucumber-reports/
