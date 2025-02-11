@@ -84,28 +84,48 @@ public class AppiumDriverManager {
     private static void startEmulator() throws IOException, InterruptedException {
         String avdName = getAvailableAVD();
         System.out.println("🔍 Using AVD: " + avdName);
-        int retries = 100;
-        int waitTime = 10000;
+        int retries = 30; 
+        int waitTime = 5000;
         boolean emulatorStarted = false;
 
+        String emulatorCommand = String.format(
+            "emulator -avd %s -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -camera-back none -camera-front none -memory 2048",
+            avdName
+        );
+    
         for (int i = 0; i < retries; i++) {
-            String detectedDevice = getConnectedDeviceName();
-            if (detectedDevice != null) {
-                System.out.println("✅ Emulator is running: " + detectedDevice);
-                return;
-            }
-
             if (!emulatorStarted) {
-                System.out.println("🚀 Starting Emulator: " + avdName);
-                Runtime.getRuntime().exec("emulator -avd " + avdName + " -no-window -no-audio -gpu off");
+                System.out.println("🚀 Starting Emulator with command: " + emulatorCommand);
+                Runtime.getRuntime().exec(emulatorCommand);
                 emulatorStarted = true;
+                Thread.sleep(10000);
             }
-
-            System.out.println("⏳ Waiting for emulator to start... (" + (i + 1) + "/" + retries + ")");
+    
+            String bootStatus = checkEmulatorBoot();
+            if (bootStatus != null) {
+                if (bootStatus.contains("1")) {
+                    System.out.println("✅ Emulator is fully booted and ready");
+                    return;
+                }
+            }
+    
+            System.out.println("⏳ Waiting for emulator to complete boot... (" + (i + 1) + "/" + retries + ")");
             Thread.sleep(waitTime);
         }
-
-        throw new RuntimeException("❌ Failed to initialize Emulator.");
+    
+        throw new RuntimeException("❌ Failed to initialize Emulator after " + retries + " attempts");
+    }
+    
+    private static String checkEmulatorBoot() throws IOException {
+        try {
+            Process process = Runtime.getRuntime().exec(
+                "adb shell getprop sys.boot_completed"
+            );
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            return reader.readLine();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static String getAvailableAVD() throws IOException {
@@ -121,7 +141,7 @@ public class AppiumDriverManager {
         String line;
         while ((line = reader.readLine()) != null) {
             if (line.startsWith("emulator-")) {
-                return line.split("\t")[0];  // Extract emulator name
+                return line.split("\t")[0];
             }
         }
         return null;

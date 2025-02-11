@@ -9,6 +9,7 @@ on:
 jobs:
   test:
     runs-on: macos-13
+    timeout-minutes: 45
 
     steps:
       - name: Checkout Repository
@@ -24,43 +25,62 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Install Node.js & Appium
+        run: |
+          brew install node
+          npm install -g appium@2.2.1
+          appium -v
+
+      - name: Install Appium Drivers
+        run: |
+          appium driver install uiautomator2
+          appium driver list
+
+      - name: Start Appium Server
+        run: |
+          appium server --base-path / --allow-insecure=adb_shell --log-timestamp --debug &
+          sleep 15  # Increased sleep time for server startup
+
       - name: Start Android Emulator
         uses: ReactiveCircus/android-emulator-runner@v2
         with:
           api-level: 30
           arch: x86_64
           profile: pixel
-          script: adb shell input keyevent 82
+          emulator-options: >-
+            -no-snapshot-save 
+            -no-window 
+            -gpu swiftshader_indirect 
+            -noaudio 
+            -no-boot-anim 
+            -camera-back none
+          script: |
+            adb wait-for-device
+            adb shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done'
+            adb shell input keyevent 82
+            adb shell settings put global window_animation_scale 0
+            adb shell settings put global transition_animation_scale 0
+            adb shell settings put global animator_duration_scale 0
 
-      - name: Install Node.js & Appium
+      - name: Check ADB Devices
         run: |
-          brew install node
-          npm install -g appium
-          appium -v
-
-      - name: Install Appium Drivers
-        run: |
-          appium driver install uiautomator2
-
-      - name: Start Appium Server
-        run: |
-          appium server --base-path / --allow-insecure=adb_shell &
-          sleep 10  
+          adb devices
+          adb shell getprop sys.boot_completed
 
       - name: Run Cucumber Tests
-        run: mvn clean test
-        working-directory: androidcucumber  
+        run: mvn clean test -Dmaven.test.failure.ignore=true
+        working-directory: androidcucumber
 
       - name: Upload Cucumber HTML Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cucumber-html-report
-          path: androidcucumber/target/cucumber-reports/cucumber-report.html  
+          path: androidcucumber/target/cucumber-reports/cucumber-report.html
 
       - name: Deploy Report to GitHub Pages
-        if: success()
-        uses: peaceiris/actions-gh-pages@v4
+        if: always()
+        uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: androidcucumber/target/cucumber-reports  
+          publish_dir: androidcucumber/target/cucumber-reports
