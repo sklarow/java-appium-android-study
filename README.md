@@ -54,8 +54,9 @@ Ensure you have the following installed on your system:
 1. **Clone the repository:**
    ```bash
    git clone <repository-link>
-   cd java-appium-android-study-main
+   cd java-appium-android-study/androidcucumber
    ```
+   Mind the java project folder ins /androidcucumber
 2. **Install dependencies using Maven:**
    ```bash
    mvn clean install
