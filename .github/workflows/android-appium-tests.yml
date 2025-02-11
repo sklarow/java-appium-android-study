@@ -40,11 +40,15 @@ jobs:
       - name: Add Android SDK emulator to PATH
         run: echo "${ANDROID_HOME}/emulator" >> $GITHUB_PATH
 
-      - name: Start Appium Server
+      - name: Install Appium and Drivers
         run: |
           npm install -g appium
-          appium &
+          appium driver install uiautomator2
+          appium driver list --installed
 
+      - name: Start Appium Server
+        run: appium --base-path "/" --allow-insecure=adb_shell &
+        
       - name: Run Android Emulator and execute tests
         uses: ReactiveCircus/android-emulator-runner@v2.33.0
         with:
