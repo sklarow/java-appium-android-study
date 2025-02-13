@@ -18,7 +18,7 @@ public class Hooks {
     @BeforeAll
     public static void beforeAllTests() {
         System.out.println("🟢 Initializing Mobile Tests: Starting Emulator & Appium Server...");
-        AppiumDriverManager.startServices(); // Start emulator & Appium server once
+        AppiumDriverManager.startServices();
     }
 
     @Before
@@ -36,35 +36,29 @@ public class Hooks {
             System.out.println("❌ Scenario Failed: " + scenario.getName());
             takeScreenshot(scenario);
         } else {
+            // Taking a screenshot for study purposes on every scenario
+            // Comment the line below if you only want screenshots for failed scenarios
+            takeScreenshot(scenario);
             System.out.println("✅ Scenario Passed: " + scenario.getName());
         }
 
-        takeScreenshot(scenario);
-
         System.out.println("🔴 Closing driver after scenario...");
-        AppiumDriverManager.quitDriver(); // Only closes driver, does not stop emulator/Appium
+        AppiumDriverManager.quitDriver();
     }
 
     @AfterAll
     public static void afterAllTests() {
         System.out.println("🔴 Stopping Emulator & Appium Server After All Tests...");
-        AppiumDriverManager.stopServices(); // Stop emulator & Appium server once
+        AppiumDriverManager.stopServices();
     }
 
 
 
     private void takeScreenshot(Scenario scenario) {
         try {
-            // Generate timestamp
             String timestamp = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
-
-            // Format screenshot name with scenario name and timestamp
-            String screenshotName = scenario.getName().replaceAll("[^a-zA-Z0-9]", "_") + "_" + timestamp;
-
-            // Capture screenshot
-            byte[] screenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.BYTES);
-
-            // Attach to Cucumber Report with formatted name
+            String screenshotName = scenario.getName().replaceAll("[^a-zA-Z0-9]", "_") + "_" + timestamp;            
+            byte[] screenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.BYTES);            
             scenario.attach(screenshot, "image/png", "Screenshot_" + screenshotName);
 
             System.out.println("📸 Screenshot captured: " + screenshotName);
