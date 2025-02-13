@@ -31,6 +31,7 @@ invest excessive time in refining it to perfection.
 - **Minimal but important test cases covering:**
   - **Login functionality** (valid and invalid credentials handling).
   - **E2E Cart Test** guarantee that the happy path is working and also test a plentora of buttons, inputs and text fields.
+- **Print screen of the last test screen for each test scenario**.
 - **Reports generated using Cucumber HTML reports**.
 - **Automatic hosting of test reports on a GitHub page.**
 
@@ -65,6 +66,14 @@ Ensure you have the following installed on your system:
    ```bash
    mvn test
    ```
+    3.1 **Run just a feature file tests (for example the cart.feature):**
+    ```bash
+    mvn test -Dcucumber.features="src/test/resources/androidcucumber/cart.feature"
+    ```
+    3.2 **Run a specific test (for example the scenario named "Locked out login"):**
+    ```bash
+    mvn test -Dcucumber.filter.name="Locked out login"  
+    ```
 4. **View test reports:**
    - Reports are generated in `target/cucumber-reports/`.
    - The latest report is published on the project's **GitHub page** (link provided in the repository).
