@@ -1,7 +1,7 @@
 # Mobile App Automation Testing Project
 
 ## Introduction
-This project is designed to automate the testing of the Swag Labs Android application using **Appium, Cucumber, and Java**. The framework ensures a **graceful execution of Appium and Appium Server**, supports **emulator and real device testing**, and generates **Cucumber reports** that are published on a GitHub page.
+This project is designed to automate the testing of the Swag Labs Android application using **Appium, Cucumber, and Java**. The framework ensures a **graceful execution of Appium and Appium Server**, supports **emulator** and should support real devices too, and generates **Cucumber reports** that are published on a GitHub page.
 
 ## Test Execution Report
 The latest test execution report can be found in here:
@@ -95,7 +95,11 @@ in an easy to reach way.
 
 Future improvements include:
 - **Adding more test scenarios** to improve coverage.
+- **Make use of Helpers and Pages** as the project grows, to avoid excessive responsabilities on the StepDefinitions.java
 - **Enhance APK selection capabilities** so it can test another releases.
+- **Add capabilitiy to choose the Emulator**
+- **Test the execution on a Real Device**
+- **Better logging instead of System.out.println all over the place**
 - **Parallel execution of tests on multiple devices.**
 - **Integration with cloud-based testing platforms (e.g., Sauce Labs, BrowserStack).**
 - **Enhanced reporting and analytics for test results.**
@@ -103,7 +107,7 @@ Future improvements include:
 - **Optimization of test execution time and resource usage.**
 
 ## Conclusion
-This project efficiently automates Android app testing using **Appium and Cucumber BDD**, ensuring smooth execution, **server management**, and **reporting via GitHub pages**. The test framework follows best practices, making it scalable and maintainable for future enhancements.
+This project efficiently automates Android app testing using **Appium and Cucumber BDD**, ensuring smooth execution, **server management**, and **reporting via GitHub pages**. 
 
 ## To take a look:
 The execution report:
